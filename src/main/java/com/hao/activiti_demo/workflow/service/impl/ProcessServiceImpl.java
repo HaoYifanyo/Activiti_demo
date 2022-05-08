@@ -1,16 +1,23 @@
 package com.hao.activiti_demo.workflow.service.impl;
 
 import com.hao.activiti_demo.workflow.dto.ProcessDTO;
+import com.hao.activiti_demo.workflow.dto.TaskDTO;
 import com.hao.activiti_demo.workflow.service.IProcessService;
 import com.hao.activiti_demo.workflow.util.ProcessUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.activiti.bpmn.model.FlowElement;
+import org.activiti.bpmn.model.SequenceFlow;
+import org.activiti.bpmn.model.StartEvent;
 import org.activiti.engine.*;
+import org.activiti.engine.history.HistoricTaskInstance;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -53,4 +60,70 @@ public class ProcessServiceImpl implements IProcessService {
             throw e;
         }
     }
+
+    @Transactional
+    @Override
+    public TaskDTO audit(String businessKey, String userId, Map<String, Object> variableMap, Map<String, Object> transientVariableMap) {
+        List<Task> todoTaskList = taskService.createTaskQuery()
+                .processInstanceBusinessKey(businessKey)
+                .taskCandidateOrAssigned(userId)
+                .orderByTaskCreateTime().desc()
+                .active()
+                .list();
+        if(!todoTaskList.isEmpty()){
+            Task task = todoTaskList.get(0);
+            String taskId = task.getId();
+            String instanceId = task.getProcessInstanceId();
+            taskService.claim(taskId, userId);
+
+            addAttachments(variableMap, taskId, instanceId);
+
+            taskService.complete(taskId, variableMap, transientVariableMap);
+
+            TaskDTO taskDTO = getHisTask(taskId);
+            taskDTO.setFirstNode(isFirstNode(taskDTO.getTaskKey(), taskDTO.getProcessDefinitionId()));
+            taskDTO.setFinalNode(isFinalNode(instanceId));
+            return taskDTO;
+        }
+
+        return null;
+    }
+
+
+    private void addAttachments(Map<String, Object> variableMap, String TaskId, String processInstanceId) {
+        // todo
+    }
+
+    private TaskDTO getHisTask(String taskId) {
+        if(StringUtils.isNotBlank(taskId)){
+            HistoricTaskInstance taskInstance = historyService.createHistoricTaskInstanceQuery().taskId(taskId).singleResult();
+            if(null != taskInstance){
+                return ProcessUtil.buildTaskDTO(taskInstance);
+            }
+        }
+        return null;
+    }
+
+    private Boolean isFirstNode(String taskKey, String processDefinitionId) {
+        Collection<FlowElement> flowElements = repositoryService.getBpmnModel(processDefinitionId).getProcesses().get(0).getFlowElements();
+        if(!flowElements.isEmpty()){
+            // Get sequenceFlows whose source is StartEvent
+            List<SequenceFlow> sequenceFlows = flowElements.stream()
+                    .filter(r -> r instanceof SequenceFlow)
+                    .map(r -> (SequenceFlow)r)
+                    .filter(r -> r.getSourceFlowElement() instanceof StartEvent)
+                    .collect(Collectors.toList());
+
+            if(!sequenceFlows.isEmpty()){
+                String firstNodeKey = sequenceFlows.get(0).getTargetFlowElement().getId();
+                return firstNodeKey.equals(taskKey);
+            }
+        }
+        return false;
+    }
+
+    private Boolean isFinalNode(String instanceId) {
+        return historyService.createHistoricActivityInstanceQuery().processInstanceId(instanceId).finished().count() > 0;
+    }
+
 }
