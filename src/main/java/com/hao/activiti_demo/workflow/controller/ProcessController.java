@@ -48,4 +48,12 @@ public class ProcessController {
         TaskDTO taskDTO = processService.audit(request.getBusinessKey(), request.getUserId(), variableMap, transientVariableMap);
         return taskDTO;
     }
+
+    @PostMapping("/open_audit")
+    public ProcessDTO openAuditProcess(@Valid @RequestBody OpenRequest request){
+        Map<String, Object> variableMap = JSONObject.parseObject(request.getVariables());
+        ProcessDTO processDTO = processService.openAuditProcess(request.getProcessDefinitionKey(), request.getBusinessKey(), request.getUserId(), variableMap);
+
+        return processDTO;
+    }
 }

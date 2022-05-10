@@ -1,5 +1,8 @@
 package com.hao.activiti_demo.workflow.service.impl;
 
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
+import com.hao.activiti_demo.workflow.constant.WorkflowConstant;
 import com.hao.activiti_demo.workflow.dto.ProcessDTO;
 import com.hao.activiti_demo.workflow.dto.TaskDTO;
 import com.hao.activiti_demo.workflow.service.IProcessService;
@@ -11,6 +14,7 @@ import org.activiti.bpmn.model.StartEvent;
 import org.activiti.engine.*;
 import org.activiti.engine.history.HistoricTaskInstance;
 import org.activiti.engine.runtime.ProcessInstance;
+import org.activiti.engine.task.Attachment;
 import org.activiti.engine.task.Task;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -89,9 +94,39 @@ public class ProcessServiceImpl implements IProcessService {
         return null;
     }
 
+    @Override
+    public ProcessDTO openAuditProcess(String processDefinitionKey, String businessKey, String userId, Map<String, Object> variableMap) {
+        ProcessDTO processDTO = openProcess(processDefinitionKey, businessKey, userId, variableMap);
 
-    private void addAttachments(Map<String, Object> variableMap, String TaskId, String processInstanceId) {
+        Map<String, Object> transientVariableMap = new HashMap<>();
+        transientVariableMap.put(WorkflowConstant.DISCARD, false);
+        audit(processDTO.getBusinessKey(), userId, variableMap, transientVariableMap);
+
+        // todoTaskList
+        List<Task> taskList = taskService.createTaskQuery().processInstanceId(processDTO.getProcessInstanceId()).list();
+        processDTO.setTaskDTOs(taskList.stream().map(ProcessUtil::buildTaskDTO).collect(Collectors.toList()));
+        return processDTO;
+    }
+
+
+    private void addAttachments(Map<String, Object> variableMap, String taskId, String processInstanceId) {
+        if(null == variableMap || variableMap.isEmpty()){
+            return;
+        }
+
+        JSONArray fileList = variableMap.containsKey(WorkflowConstant.FILE_LIST) ? (JSONArray) variableMap.get(WorkflowConstant.FILE_LIST) : null;
+        if(null != fileList && !fileList.isEmpty()){
+            for (int i = 0; i < fileList.size(); i++) {
+                JSONObject jsonObject = fileList.getJSONObject(i);
+                Attachment attachment = taskService.createAttachment("add", taskId, processInstanceId, fileName(jsonObject),"", jsonObject.getString(WorkflowConstant.FILE_URL));
+                taskService.saveAttachment(attachment);
+            }
+        }
+    }
+
+    private String fileName(JSONObject jsonObject) {
         // todo
+        return null;
     }
 
     private TaskDTO getHisTask(String taskId) {
