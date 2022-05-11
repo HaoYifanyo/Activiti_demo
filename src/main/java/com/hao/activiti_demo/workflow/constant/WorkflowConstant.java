@@ -5,4 +5,6 @@ public class WorkflowConstant {
     public static final String DISCARD = "discard";
     public static final String FILE_LIST = "fileList";
     public static final String FILE_URL = "fileUrl";
+    public static final String FILE_ID = "fileId";
+    public static final String FILE_NAME = "fileName";
 }

@@ -21,10 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -118,15 +115,17 @@ public class ProcessServiceImpl implements IProcessService {
         if(null != fileList && !fileList.isEmpty()){
             for (int i = 0; i < fileList.size(); i++) {
                 JSONObject jsonObject = fileList.getJSONObject(i);
-                Attachment attachment = taskService.createAttachment("add", taskId, processInstanceId, fileName(jsonObject),"", jsonObject.getString(WorkflowConstant.FILE_URL));
+                Attachment attachment = taskService.createAttachment(null, taskId, processInstanceId, fileName(jsonObject),null, jsonObject.getString(WorkflowConstant.FILE_URL));
                 taskService.saveAttachment(attachment);
             }
         }
     }
 
     private String fileName(JSONObject jsonObject) {
-        // todo
-        return null;
+        return new StringJoiner(",")
+                .add(WorkflowConstant.FILE_ID + "=" + jsonObject.getString(WorkflowConstant.FILE_ID))
+                .add(WorkflowConstant.FILE_NAME + "=" + jsonObject.getString(WorkflowConstant.FILE_NAME))
+                .toString();
     }
 
     private TaskDTO getHisTask(String taskId) {
