@@ -56,4 +56,10 @@ public class ProcessController {
 
         return processDTO;
     }
+
+    @PostMapping("/discard")
+    public void discard(@Valid @RequestBody AuditRequest request){
+        Map<String, Object> variableMap = JSONObject.parseObject(request.getVariables());
+        processService.discard(request.getBusinessKey(), request.getUserId(), variableMap);
+    }
 }

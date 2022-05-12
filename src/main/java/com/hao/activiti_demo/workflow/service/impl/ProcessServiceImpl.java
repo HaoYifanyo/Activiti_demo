@@ -54,8 +54,7 @@ public class ProcessServiceImpl implements IProcessService {
             processDTO.setVariables(processInstance.getProcessVariables());
             processDTO.setBusinessKey(processInstance.getBusinessKey());
 
-            // todoTaskList
-            List<Task> taskList = taskService.createTaskQuery().processInstanceId(instanceId).list();
+            List<Task> taskList = getTodoTaskList(instanceId);
             processDTO.setTaskDTOs(taskList.stream().map(ProcessUtil::buildTaskDTO).collect(Collectors.toList()));
             return processDTO;
         } catch (RuntimeException e) {
@@ -66,12 +65,7 @@ public class ProcessServiceImpl implements IProcessService {
     @Transactional
     @Override
     public TaskDTO audit(String businessKey, String userId, Map<String, Object> variableMap, Map<String, Object> transientVariableMap) {
-        List<Task> todoTaskList = taskService.createTaskQuery()
-                .processInstanceBusinessKey(businessKey)
-                .taskCandidateOrAssigned(userId)
-                .orderByTaskCreateTime().desc()
-                .active()
-                .list();
+        List<Task> todoTaskList = getTodoTaskList(businessKey, userId);
         if(!todoTaskList.isEmpty()){
             Task task = todoTaskList.get(0);
             String taskId = task.getId();
@@ -91,6 +85,19 @@ public class ProcessServiceImpl implements IProcessService {
         return null;
     }
 
+    private List<Task> getTodoTaskList(String instanceId) {
+        return taskService.createTaskQuery().processInstanceId(instanceId).list();
+    }
+
+    private List<Task> getTodoTaskList(String businessKey, String userId) {
+        return taskService.createTaskQuery()
+                    .processInstanceBusinessKey(businessKey)
+                    .taskCandidateOrAssigned(userId)
+                    .orderByTaskCreateTime().desc()
+                    .active()
+                    .list();
+    }
+
     @Override
     public ProcessDTO openAuditProcess(String processDefinitionKey, String businessKey, String userId, Map<String, Object> variableMap) {
         ProcessDTO processDTO = openProcess(processDefinitionKey, businessKey, userId, variableMap);
@@ -99,10 +106,29 @@ public class ProcessServiceImpl implements IProcessService {
         transientVariableMap.put(WorkflowConstant.DISCARD, false);
         audit(processDTO.getBusinessKey(), userId, variableMap, transientVariableMap);
 
-        // todoTaskList
-        List<Task> taskList = taskService.createTaskQuery().processInstanceId(processDTO.getProcessInstanceId()).list();
+        List<Task> taskList = getTodoTaskList(processDTO.getProcessInstanceId());
         processDTO.setTaskDTOs(taskList.stream().map(ProcessUtil::buildTaskDTO).collect(Collectors.toList()));
         return processDTO;
+    }
+
+    @Override
+    public void discard(String businessKey, String userId, Map<String, Object> variableMap) {
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceBusinessKey(businessKey).singleResult();
+        if(null == processInstance){
+            log.error("Failed to discard, process instance does not exist.");
+            // todo
+        }
+
+        List<Task> todoTaskList = getTodoTaskList(businessKey, userId);
+        if(!todoTaskList.isEmpty()){
+            Task task = todoTaskList.get(0);
+            String taskId = task.getId();
+
+            addAttachments(variableMap, task.getId(), task.getProcessInstanceId());
+            taskService.setVariablesLocal(taskId, variableMap);
+            runtimeService.deleteProcessInstance(processInstance.getProcessInstanceId(), "discard, userId:" + userId);
+        }
+
     }
 
 
