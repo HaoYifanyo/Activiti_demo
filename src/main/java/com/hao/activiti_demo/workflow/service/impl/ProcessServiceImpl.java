@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.hao.activiti_demo.workflow.constant.WorkflowConstant;
 import com.hao.activiti_demo.workflow.dto.ProcessDTO;
 import com.hao.activiti_demo.workflow.dto.TaskDTO;
+import com.hao.activiti_demo.workflow.expection.WorkflowException;
 import com.hao.activiti_demo.workflow.service.IProcessService;
 import com.hao.activiti_demo.workflow.util.ProcessUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.hao.activiti_demo.workflow.expection.WorkflowExCode.*;
 
 @Slf4j
 @Service
@@ -43,6 +46,8 @@ public class ProcessServiceImpl implements IProcessService {
     @Override
     public ProcessDTO openProcess(String processDefinitionKey, String businessKey, String userId, Map<String, Object> variableMap) {
         try{
+            log.info("Open process——start, processDefinitionKey:{}, businessKey:{}, userId:{}, variableMap:{}",
+                    processDefinitionKey, businessKey, userId, variableMap);
             ProcessDTO processDTO = new ProcessDTO();
             identityService.setAuthenticatedUserId(userId);
             ProcessInstance processInstance = runtimeService.startProcessInstanceByKey(processDefinitionKey, businessKey, variableMap);
@@ -56,9 +61,11 @@ public class ProcessServiceImpl implements IProcessService {
 
             List<Task> taskList = getTodoTaskList(instanceId);
             processDTO.setTaskDTOs(taskList.stream().map(ProcessUtil::buildTaskDTO).collect(Collectors.toList()));
+            log.info("Open process——end, return processDTO:{}", processDTO);
             return processDTO;
         } catch (RuntimeException e) {
-            throw e;
+            log.error("Failed to open process.", e);
+            throw new WorkflowException(OPEN_PROCESS_ERROR);
         }
     }
 
@@ -66,23 +73,24 @@ public class ProcessServiceImpl implements IProcessService {
     @Override
     public TaskDTO audit(String businessKey, String userId, Map<String, Object> variableMap, Map<String, Object> transientVariableMap) {
         List<Task> todoTaskList = getTodoTaskList(businessKey, userId);
-        if(!todoTaskList.isEmpty()){
-            Task task = todoTaskList.get(0);
-            String taskId = task.getId();
-            String instanceId = task.getProcessInstanceId();
-            taskService.claim(taskId, userId);
-
-            addAttachments(variableMap, taskId, instanceId);
-
-            taskService.complete(taskId, variableMap, transientVariableMap);
-
-            TaskDTO taskDTO = getHisTask(taskId);
-            taskDTO.setFirstNode(isFirstNode(taskDTO.getTaskKey(), taskDTO.getProcessDefinitionId()));
-            taskDTO.setFinalNode(isFinalNode(instanceId));
-            return taskDTO;
+        if(todoTaskList.isEmpty()){
+            log.error("Failed to audit, can't find eligible to-do tasks.");
+            throw new WorkflowException(TASKS_NOT_FOUND);
         }
 
-        return null;
+        Task task = todoTaskList.get(0);
+        String taskId = task.getId();
+        String instanceId = task.getProcessInstanceId();
+        taskService.claim(taskId, userId);
+
+        addAttachments(variableMap, taskId, instanceId);
+
+        taskService.complete(taskId, variableMap, transientVariableMap);
+
+        TaskDTO taskDTO = getHisTask(taskId);
+        taskDTO.setFirstNode(isFirstNode(taskDTO.getTaskKey(), taskDTO.getProcessDefinitionId()));
+        taskDTO.setFinalNode(isFinalNode(instanceId));
+        return taskDTO;
     }
 
     private List<Task> getTodoTaskList(String instanceId) {
@@ -116,19 +124,20 @@ public class ProcessServiceImpl implements IProcessService {
         ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceBusinessKey(businessKey).singleResult();
         if(null == processInstance){
             log.error("Failed to discard, process instance does not exist.");
-            // todo
+            throw new WorkflowException(INSTANCE_NOT_EXIST);
         }
 
         List<Task> todoTaskList = getTodoTaskList(businessKey, userId);
-        if(!todoTaskList.isEmpty()){
-            Task task = todoTaskList.get(0);
-            String taskId = task.getId();
-
-            addAttachments(variableMap, task.getId(), task.getProcessInstanceId());
-            taskService.setVariablesLocal(taskId, variableMap);
-            runtimeService.deleteProcessInstance(processInstance.getProcessInstanceId(), "discard, userId:" + userId);
+        if(todoTaskList.isEmpty()){
+            log.error("Failed to discard, can't find eligible to-do tasks.");
+            throw new WorkflowException(TASKS_NOT_FOUND);
         }
+        Task task = todoTaskList.get(0);
+        String taskId = task.getId();
 
+        addAttachments(variableMap, task.getId(), task.getProcessInstanceId());
+        taskService.setVariablesLocal(taskId, variableMap);
+        runtimeService.deleteProcessInstance(processInstance.getProcessInstanceId(), "discard, userId:" + userId);
     }
 
 
