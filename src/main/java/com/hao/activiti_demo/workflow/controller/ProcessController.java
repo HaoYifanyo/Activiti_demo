@@ -62,4 +62,11 @@ public class ProcessController {
         Map<String, Object> variableMap = JSONObject.parseObject(request.getVariables());
         processService.discard(request.getBusinessKey(), request.getUserId(), variableMap);
     }
+
+    @PostMapping("/back")
+    public TaskDTO back(@Valid @RequestBody AuditRequest request){
+        Map<String, Object> variableMap = JSONObject.parseObject(request.getVariables());
+        TaskDTO taskDTO = processService.back(request.getBusinessKey(), request.getUserId(), variableMap);
+        return taskDTO;
+    }
 }

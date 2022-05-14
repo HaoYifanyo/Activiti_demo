@@ -106,6 +106,7 @@ public class ProcessServiceImpl implements IProcessService {
                     .list();
     }
 
+    @Transactional
     @Override
     public ProcessDTO openAuditProcess(String processDefinitionKey, String businessKey, String userId, Map<String, Object> variableMap) {
         ProcessDTO processDTO = openProcess(processDefinitionKey, businessKey, userId, variableMap);
@@ -119,6 +120,7 @@ public class ProcessServiceImpl implements IProcessService {
         return processDTO;
     }
 
+    @Transactional
     @Override
     public void discard(String businessKey, String userId, Map<String, Object> variableMap) {
         ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceBusinessKey(businessKey).singleResult();
@@ -138,6 +140,43 @@ public class ProcessServiceImpl implements IProcessService {
         addAttachments(variableMap, task.getId(), task.getProcessInstanceId());
         taskService.setVariablesLocal(taskId, variableMap);
         runtimeService.deleteProcessInstance(processInstance.getProcessInstanceId(), "discard, userId:" + userId);
+    }
+
+    @Transactional
+    @Override
+    public TaskDTO back(String businessKey, String userId, Map<String, Object> variableMap) {
+        log.info("Back to previous node——start, businessKey:{}, userId:{}, variableMap:{}", businessKey, userId, variableMap);
+        List<Task> todoTaskList = getTodoTaskList(businessKey, userId);
+        if(todoTaskList.isEmpty()){
+            log.error("Failed to back, can't find eligible to-do tasks.");
+            throw new WorkflowException(TASKS_NOT_FOUND);
+        }
+
+        Task task = todoTaskList.get(0);
+        List<TaskDTO> doneTaskList = getDoneTaskList(task.getProcessInstanceId());
+        if(doneTaskList.isEmpty()){
+            log.error("Failed to back, there are no nodes that can be backed.");
+            throw new WorkflowException(NO_NODES_BACKED);
+        }
+
+        String jumpTaskKey = doneTaskList.get(0).getTaskKey();
+        // todo
+        return null;
+    }
+
+    private List<TaskDTO> getDoneTaskList(String processInstanceId) {
+        if(StringUtils.isNotBlank(processInstanceId)){
+            List<HistoricTaskInstance> taskInstanceList = historyService.createHistoricTaskInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .orderByHistoricTaskInstanceStartTime()
+                    .desc()
+                    .list();
+            if(null != taskInstanceList){
+                List<TaskDTO> taskDTOList = taskInstanceList.stream().map(ProcessUtil::buildTaskDTO).collect(Collectors.toList());
+                return taskDTOList;
+            }
+        }
+        return null;
     }
 
 

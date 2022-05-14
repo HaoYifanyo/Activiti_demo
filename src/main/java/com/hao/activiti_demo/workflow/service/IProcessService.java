@@ -23,4 +23,9 @@ public interface IProcessService {
      * If there are no special restrictions, the process can be discarded at any node.
      */
     void discard(String businessKey, String userId, Map<String, Object> variableMap);
+
+    /**
+     * Back to the previous node.
+     */
+    TaskDTO back(String businessKey, String userId, Map<String, Object> variableMap);
 }
