@@ -7,6 +7,7 @@ public enum WorkflowExCode {
     NO_NODES_BACKED("003", "There are no nodes that can be backed."),
 
     OPEN_PROCESS_ERROR("101", "Failed to open process."),
+    BACK_PROCESS_ERROR("102", "Failed to back process."),
     ;
 
     private String code;

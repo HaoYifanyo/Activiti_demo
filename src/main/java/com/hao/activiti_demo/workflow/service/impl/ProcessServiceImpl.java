@@ -2,6 +2,7 @@ package com.hao.activiti_demo.workflow.service.impl;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.hao.activiti_demo.workflow.command.BackProcessCmd;
 import com.hao.activiti_demo.workflow.constant.WorkflowConstant;
 import com.hao.activiti_demo.workflow.dto.ProcessDTO;
 import com.hao.activiti_demo.workflow.dto.TaskDTO;
@@ -41,6 +42,8 @@ public class ProcessServiceImpl implements IProcessService {
     RuntimeService runtimeService;
     @Autowired
     RepositoryService repositoryService;
+    @Autowired
+    ManagementService managementService;
 
     @Transactional
     @Override
@@ -153,15 +156,29 @@ public class ProcessServiceImpl implements IProcessService {
         }
 
         Task task = todoTaskList.get(0);
+        String taskId = task.getId();
         List<TaskDTO> doneTaskList = getDoneTaskList(task.getProcessInstanceId());
-        if(doneTaskList.isEmpty()){
+        List<String> previousTaskKeyList = getPreviousTaskKeyList(task.getProcessDefinitionId(), task.getTaskDefinitionKey());
+        if(doneTaskList.isEmpty() || previousTaskKeyList.isEmpty()){
             log.error("Failed to back, there are no nodes that can be backed.");
             throw new WorkflowException(NO_NODES_BACKED);
         }
 
-        String jumpTaskKey = doneTaskList.get(0).getTaskKey();
-        // todo
-        return null;
+        // Since the done tasks may contain tasks after the to-do task, they need to be filtered.
+        List<TaskDTO> previousDoneTaskList = doneTaskList.stream().filter(r -> previousTaskKeyList.contains(r.getTaskKey())).collect(Collectors.toList());
+        String jumpTaskKey = previousDoneTaskList.get(0).getTaskKey();
+
+        try {
+            taskService.setVariablesLocal(taskId, variableMap);
+            addAttachments(variableMap, taskId, task.getProcessInstanceId());
+            managementService.executeCommand(new BackProcessCmd(taskId, jumpTaskKey, variableMap, userId));
+
+            return null;
+        } catch (RuntimeException e){
+            log.error("Failed to back process.", e);
+            throw new WorkflowException(BACK_PROCESS_ERROR);
+        }
+
     }
 
     private List<TaskDTO> getDoneTaskList(String processInstanceId) {
@@ -176,7 +193,22 @@ public class ProcessServiceImpl implements IProcessService {
                 return taskDTOList;
             }
         }
-        return null;
+        return new ArrayList<>();
+    }
+
+    private List<String> getPreviousTaskKeyList(String processDefinitionId, String taskDefinitionKey) {
+        Collection<FlowElement> flowElements = repositoryService.getBpmnModel(processDefinitionId).getProcesses().get(0).getFlowElements();
+        if(!flowElements.isEmpty()){
+            // Get sequenceFlows whose target is the current task
+            List<SequenceFlow> sequenceFlows = flowElements.stream()
+                    .filter(r -> r instanceof SequenceFlow)
+                    .map(r -> (SequenceFlow)r)
+                    .filter(r -> r.getTargetFlowElement().getId().equals(taskDefinitionKey))
+                    .collect(Collectors.toList());
+
+            return sequenceFlows.stream().map(r -> r.getSourceFlowElement().getId()).collect(Collectors.toList());
+        }
+        return new ArrayList<>();
     }
 
 
