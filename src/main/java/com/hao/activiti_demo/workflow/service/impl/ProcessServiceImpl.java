@@ -2,7 +2,7 @@ package com.hao.activiti_demo.workflow.service.impl;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.hao.activiti_demo.workflow.command.BackProcessCmd;
+import com.hao.activiti_demo.workflow.command.FreeJumpCmd;
 import com.hao.activiti_demo.workflow.constant.WorkflowConstant;
 import com.hao.activiti_demo.workflow.dto.ProcessDTO;
 import com.hao.activiti_demo.workflow.dto.TaskDTO;
@@ -147,7 +147,7 @@ public class ProcessServiceImpl implements IProcessService {
 
     @Transactional
     @Override
-    public TaskDTO back(String businessKey, String userId, Map<String, Object> variableMap) {
+    public List<TaskDTO> back(String businessKey, String userId, Map<String, Object> variableMap) {
         log.info("Back to previous node——start, businessKey:{}, userId:{}, variableMap:{}", businessKey, userId, variableMap);
         List<Task> todoTaskList = getTodoTaskList(businessKey, userId);
         if(todoTaskList.isEmpty()){
@@ -157,7 +157,8 @@ public class ProcessServiceImpl implements IProcessService {
 
         Task task = todoTaskList.get(0);
         String taskId = task.getId();
-        List<TaskDTO> doneTaskList = getDoneTaskList(task.getProcessInstanceId());
+        String instanceId = task.getProcessInstanceId();
+        List<TaskDTO> doneTaskList = getDoneTaskList(instanceId);
         List<String> previousTaskKeyList = getPreviousTaskKeyList(task.getProcessDefinitionId(), task.getTaskDefinitionKey());
         if(doneTaskList.isEmpty() || previousTaskKeyList.isEmpty()){
             log.error("Failed to back, there are no nodes that can be backed.");
@@ -170,10 +171,13 @@ public class ProcessServiceImpl implements IProcessService {
 
         try {
             taskService.setVariablesLocal(taskId, variableMap);
-            addAttachments(variableMap, taskId, task.getProcessInstanceId());
-            managementService.executeCommand(new BackProcessCmd(taskId, jumpTaskKey, variableMap, userId));
+            addAttachments(variableMap, taskId, instanceId);
+            managementService.executeCommand(new FreeJumpCmd(taskId, jumpTaskKey, variableMap, userId));
 
-            return null;
+            List<Task> todoTaskListNow = getTodoTaskList(instanceId);
+            List<TaskDTO> taskDTOS = todoTaskListNow.stream().map(ProcessUtil::buildTaskDTO).collect(Collectors.toList());
+            taskDTOS.forEach(r -> r.setFirstNode(isFirstNode(r.getTaskKey(), r.getProcessDefinitionId())));
+            return taskDTOS;
         } catch (RuntimeException e){
             log.error("Failed to back process.", e);
             throw new WorkflowException(BACK_PROCESS_ERROR);

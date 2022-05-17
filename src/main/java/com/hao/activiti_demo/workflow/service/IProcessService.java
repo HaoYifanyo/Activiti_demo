@@ -4,6 +4,7 @@ import com.hao.activiti_demo.workflow.dto.ProcessDTO;
 import com.hao.activiti_demo.workflow.dto.TaskDTO;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -27,5 +28,5 @@ public interface IProcessService {
     /**
      * Back to the previous node.
      */
-    TaskDTO back(String businessKey, String userId, Map<String, Object> variableMap);
+    List<TaskDTO> back(String businessKey, String userId, Map<String, Object> variableMap);
 }

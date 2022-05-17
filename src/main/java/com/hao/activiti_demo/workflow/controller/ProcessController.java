@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -64,9 +65,8 @@ public class ProcessController {
     }
 
     @PostMapping("/back")
-    public TaskDTO back(@Valid @RequestBody AuditRequest request){
+    public List<TaskDTO> back(@Valid @RequestBody AuditRequest request){
         Map<String, Object> variableMap = JSONObject.parseObject(request.getVariables());
-        TaskDTO taskDTO = processService.back(request.getBusinessKey(), request.getUserId(), variableMap);
-        return taskDTO;
+        return processService.back(request.getBusinessKey(), request.getUserId(), variableMap);
     }
 }
