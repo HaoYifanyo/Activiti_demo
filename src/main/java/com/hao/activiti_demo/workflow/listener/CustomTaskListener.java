@@ -1,5 +1,7 @@
 package com.hao.activiti_demo.workflow.listener;
 
+import com.hao.activiti_demo.workflow.constant.WorkflowConstant;
+import com.hao.activiti_demo.workflow.expection.WorkflowException;
 import lombok.extern.slf4j.Slf4j;
 import org.activiti.engine.HistoryService;
 import org.activiti.engine.TaskService;
@@ -8,15 +10,16 @@ import org.activiti.engine.delegate.TaskListener;
 import org.activiti.engine.history.HistoricActivityInstance;
 import org.activiti.engine.impl.persistence.entity.IdentityLinkEntity;
 import org.activiti.engine.task.IdentityLink;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.hao.activiti_demo.workflow.expection.WorkflowExCode.NO_CANDIDATE_GROUPS;
+import static com.hao.activiti_demo.workflow.expection.WorkflowExCode.NO_CANDIDATE_USERS;
 
 @Component
 @Slf4j
@@ -64,18 +67,38 @@ public class CustomTaskListener implements TaskListener {
                 .stream().filter(r -> ((IdentityLinkEntity)r).isGroup())
                 .map(IdentityLink::getGroupId).collect(Collectors.toList());
         if(candidateGroups.isEmpty()){
-            log.error("");
+            log.error("CustomTaskListener: Can't find candidate groups.");
+            throw new WorkflowException(NO_CANDIDATE_GROUPS);
         }
 
+        Map<String, String> candidateMap = parseCandidateGroups(candidateGroups);
         List<String> userIds = getCandidateUsers(candidateGroups);
         if(userIds.isEmpty()){
-            log.error("");
+            log.error("CustomTaskListener: Can't find candidate users.");
+            throw new WorkflowException(NO_CANDIDATE_USERS);
         }
         delegateTask.addCandidateUsers(userIds);
+        log.info("CustomTaskListener: add candidate users, userIds:{}", userIds);
+    }
 
+    private Map<String, String> parseCandidateGroups(List<String> candidateGroups) {
+        Map<String, String> candidateMap = new HashMap<>();
+        for(String candidate : candidateGroups){
+            String[] candidates = candidate.split("=");
+            if(candidates.length < 2){
+                break;
+            }
+            String candidateType = candidates[0];
+            if(ArrayUtils.contains(WorkflowConstant.SUPPORT_CANDIDATE_TYPE, candidateType)){
+                String candidateValue = candidates[1];
+                candidateMap.put(candidateType, candidateValue.replaceAll("\\|", ","));
+            }
+        }
+        return candidateMap;
     }
 
     private List<String> getCandidateUsers(List<String> candidateGroups) {
+        // todo: call the function of user module
         return null;
     }
 }

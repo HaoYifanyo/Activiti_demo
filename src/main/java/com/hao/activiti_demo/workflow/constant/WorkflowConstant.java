@@ -7,4 +7,6 @@ public class WorkflowConstant {
     public static final String FILE_URL = "fileUrl";
     public static final String FILE_ID = "fileId";
     public static final String FILE_NAME = "fileName";
+
+    public static final String[] SUPPORT_CANDIDATE_TYPE = {"deptType", "roleType", "deptLevel"};
 }
