@@ -5,6 +5,7 @@ import com.hao.activiti_demo.workflow.dto.AuditRequest;
 import com.hao.activiti_demo.workflow.dto.OpenRequest;
 import com.hao.activiti_demo.workflow.dto.ProcessDTO;
 import com.hao.activiti_demo.workflow.dto.TaskDTO;
+import com.hao.activiti_demo.workflow.multiThread.AuditTask;
 import com.hao.activiti_demo.workflow.service.IProcessService;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -14,10 +15,17 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.validation.Valid;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  *
@@ -48,6 +56,38 @@ public class ProcessController {
 
         TaskDTO taskDTO = processService.audit(request.getBusinessKey(), request.getUserId(), variableMap, transientVariableMap);
         return taskDTO;
+    }
+
+    @PostMapping("/audit_batch")
+    public Map<String, Object> auditBatch(@Valid @RequestBody List<AuditRequest> requestList){
+        List<TaskDTO> successTaskDTOS = new ArrayList<>();
+        List<String> errorTaskBizKeys = new ArrayList<>();
+        List<Future<AuditTask>> futureList = new ArrayList<>();
+
+        ExecutorService executor = Executors.newCachedThreadPool();
+
+        // Set the requestAttributes to be shared by the child thread
+        ServletRequestAttributes requestAttributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        RequestContextHolder.setRequestAttributes(requestAttributes, true);
+        requestList.forEach(r -> {
+            AuditTask task = new AuditTask(processService, r);
+            Future<AuditTask> future = executor.submit(task);
+            futureList.add(future);
+        });
+        executor.shutdown();
+
+        try {
+            for(Future<AuditTask> future : futureList){
+                // todo
+            }
+        } catch (Exception e){
+            log.error("Failed to audit batch.", e);
+        }
+
+        Map<String, Object> resultMap = new HashMap<>();
+        resultMap.put("success", successTaskDTOS);
+        resultMap.put("error", errorTaskBizKeys);
+        return resultMap;
     }
 
     @PostMapping("/open_audit")
