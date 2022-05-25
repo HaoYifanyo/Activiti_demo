@@ -27,6 +27,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static com.hao.activiti_demo.workflow.constant.WorkflowConstant.*;
+
 /**
  *
  */
@@ -62,7 +64,7 @@ public class ProcessController {
     public Map<String, Object> auditBatch(@Valid @RequestBody List<AuditRequest> requestList){
         List<TaskDTO> successTaskDTOS = new ArrayList<>();
         List<String> errorTaskBizKeys = new ArrayList<>();
-        List<Future<AuditTask>> futureList = new ArrayList<>();
+        List<Future<Map>> futureList = new ArrayList<>();
 
         ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -71,14 +73,18 @@ public class ProcessController {
         RequestContextHolder.setRequestAttributes(requestAttributes, true);
         requestList.forEach(r -> {
             AuditTask task = new AuditTask(processService, r);
-            Future<AuditTask> future = executor.submit(task);
+            Future<Map> future = executor.submit(task);
             futureList.add(future);
         });
         executor.shutdown();
 
         try {
-            for(Future<AuditTask> future : futureList){
-                // todo
+            for(Future<Map> future : futureList){
+                if(future.get().containsKey(FUTURE_ERROR)){
+                    errorTaskBizKeys.add((String) future.get().get(FUTURE_ERROR));
+                } else {
+                    successTaskDTOS.add((TaskDTO) future.get().get(FUTURE_SUCCESS));
+                }
             }
         } catch (Exception e){
             log.error("Failed to audit batch.", e);
