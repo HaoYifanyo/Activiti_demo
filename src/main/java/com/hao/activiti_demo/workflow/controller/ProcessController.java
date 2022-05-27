@@ -6,6 +6,7 @@ import com.hao.activiti_demo.workflow.dto.OpenRequest;
 import com.hao.activiti_demo.workflow.dto.ProcessDTO;
 import com.hao.activiti_demo.workflow.dto.TaskDTO;
 import com.hao.activiti_demo.workflow.multiThread.AuditTask;
+import com.hao.activiti_demo.workflow.multiThread.OpenAuditTask;
 import com.hao.activiti_demo.workflow.service.IProcessService;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -102,6 +103,42 @@ public class ProcessController {
         ProcessDTO processDTO = processService.openAuditProcess(request.getProcessDefinitionKey(), request.getBusinessKey(), request.getUserId(), variableMap);
 
         return processDTO;
+    }
+
+    @PostMapping("/open_batch")
+    public Map<String, Object> openAuditBatch(@Valid @RequestBody List<OpenRequest> requestList){
+        List<ProcessDTO> successProcessDTOS = new ArrayList<>();
+        List<String> errorTaskBizKeys = new ArrayList<>();
+        List<Future<Map>> futureList = new ArrayList<>();
+
+        ExecutorService executor = Executors.newCachedThreadPool();
+
+        // Set the requestAttributes to be shared by the child thread
+        ServletRequestAttributes requestAttributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        RequestContextHolder.setRequestAttributes(requestAttributes, true);
+        requestList.forEach(r -> {
+            OpenAuditTask task = new OpenAuditTask(processService, r);
+            Future<Map> future = executor.submit(task);
+            futureList.add(future);
+        });
+        executor.shutdown();
+
+        try {
+            for(Future<Map> future : futureList){
+                if(future.get().containsKey(FUTURE_ERROR)){
+                    errorTaskBizKeys.add((String) future.get().get(FUTURE_ERROR));
+                } else {
+                    successProcessDTOS.add((ProcessDTO) future.get().get(FUTURE_SUCCESS));
+                }
+            }
+        } catch (Exception e){
+            log.error("Failed to open batch.", e);
+        }
+
+        Map<String, Object> resultMap = new HashMap<>();
+        resultMap.put("success", successProcessDTOS);
+        resultMap.put("error", errorTaskBizKeys);
+        return resultMap;
     }
 
     @PostMapping("/discard")
