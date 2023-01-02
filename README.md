@@ -9,7 +9,11 @@ The most important task of it is to provide flexible and customizable processes.
 In this project, I created some useful wrapper [methods](#Methods) to make it easier for other modules to operate the processes. 
 The code has been used in large real software projects. I removed the parts of them that were associated with business code and improved them.
 
+## Usage
+Usually, the module can be run as a separate service. For example, you can use Spring Cloud and have other modules call methods in this module via HTTP requests. 
+However, it is possible to use it without complex architecture. You can include the code directly in the project. The calls within the service will be easier and faster.
 ## Methods
 ### open
+
 
 ## TaskListener
