@@ -70,6 +70,9 @@ The implementation is to delete the process instance by `runtimeService.deletePr
 The two multithreading methods `openAuditBatch` and `auditBatch` are implemented with `Future` and `Callable`.
 
 ## TaskListener
+A task listener is used to execute custom Java logic or an expression upon the occurrence of a certain task-related event.
+
+`CustomTaskListener` is an example. The implementation idea is to get the configuration information from candidate groups and parse it, and call the method of the user module to get the **candidate users**.
 
 ## Configuration
 ### In the yml file
@@ -94,5 +97,5 @@ spring:
 ```
     
 ### In the configuration class
-About the deployment mode, see `activitiConfig`.
+About the deployment mode, see `ActivitiConfig`.
     
