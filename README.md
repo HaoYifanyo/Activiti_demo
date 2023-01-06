@@ -30,11 +30,11 @@ The essence of Activiti is to manipulate data through the following services.
 
 * ACT_GE_*: general data, which is used in various use cases.
 
-### A metaphor
+### An analogy
 ![activiti structure](https://user-images.githubusercontent.com/41005474/210773264-ea43e2b1-88c1-4cc9-be81-c1d4d0d37515.png)
 
-* There are many different toy production lines in the factory, each with a different process. (**ProcessDefinition**)
-* Many of the same toys can be produced on one production line. (**ProcessInstance**, There can be many instances of one definition.)
+* There are many different toy train production lines in the factory, each with a different process. (**ProcessDefinition**)
+* Many of the same toy trains can be produced on one production line. (**ProcessInstance**, There can be many instances of one definition.)
 * There can be N carriages in a toy train. (**Task**, there can be N task nodes in an instance.)
 * There are goods in the carriages. (candidates and other variables, such as time and comments)
 
@@ -42,10 +42,29 @@ The essence of Activiti is to manipulate data through the following services.
 ### open
 
 `ProcessDTO openProcess(String processDefinitionKey, String businessKey, String userId, Map<String, Object> variableMap);`
+
 Create a process instance by `processDefinitionKey`. After running this method, the process will reach the first node.
 
 `ProcessDTO openAuditProcess(String processDefinitionKey, String businessKey, String userId, Map<String, Object> variableMap);`
+
 When the first node is the submitter (to make it easier to reject the process from other nodes to the submitter), we generally open the process and audit the first node at the same time.
+
+### audit
+
+`TaskDTO audit(String businessKey, String userId, Map<String, Object> variableMap, Map<String, Object> transientVariableMap);`
+
+Audit means looking up the task and making a decision. What the next task node is depends on the variables in `transientVariableMap`, corresponding to conditionExpression of sequence flow in the bpmn file.
+
+### back
+`List<TaskDTO> back(String businessKey, String userId, Map<String, Object> variableMap);`
+
+Go back to the previous node. The default is to assign the task to the person who last handled the task. The assignment strategy can be changed in `CustomTaskListener`.
+
+### discard
+`void discard(String businessKey, String userId, Map<String, Object> variableMap);`
+
+If there are no special restrictions, the process can be discarded at any node.
+The implementation is to delete the process instance by `runtimeService.deleteProcessInstance`. This method will delete the data in ACT_RU_VARIBLE, ACT_RU_IDENTITYLINK, ACT_RU_TASK, ACT_RU_EXECUTION, and update data in ACT_HI_ACTINST, ACT_HI_TASKINST, ACT_HI_PROCINST.
 
 ### BatchMethods
 The two multithreading methods `openAuditBatch` and `auditBatch` are implemented with `Future` and `Callable`.
